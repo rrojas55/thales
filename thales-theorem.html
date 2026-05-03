@@ -1,0 +1,400 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Thales' Theorem</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=EB+Garamond:ital,wght@0,400;0,600;1,400&family=JetBrains+Mono:wght@300;400&display=swap');
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --ink: #1a1410;
+    --paper: #f5f0e8;
+    --aged: #e8dfc8;
+    --sepia: #8b7355;
+    --accent: #c0392b;
+    --blue: #2c5f8a;
+    --gold: #b8860b;
+  }
+
+  body {
+    background: var(--paper);
+    color: var(--ink);
+    font-family: 'EB Garamond', serif;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 2rem;
+    background-image:
+      radial-gradient(ellipse at 20% 50%, rgba(139,115,85,0.08) 0%, transparent 60%),
+      radial-gradient(ellipse at 80% 20%, rgba(139,115,85,0.06) 0%, transparent 50%);
+  }
+
+  header {
+    text-align: center;
+    margin-bottom: 1.5rem;
+  }
+
+  header h1 {
+    font-size: clamp(1.8rem, 4vw, 2.8rem);
+    font-weight: 600;
+    letter-spacing: 0.02em;
+    line-height: 1.1;
+  }
+
+  header h1 em {
+    color: var(--accent);
+    font-style: italic;
+  }
+
+  header p {
+    font-size: 1.05rem;
+    color: var(--sepia);
+    margin-top: 0.4rem;
+    font-style: italic;
+  }
+
+  .canvas-wrap {
+    position: relative;
+    border: 1.5px solid var(--sepia);
+    border-radius: 2px;
+    background: var(--aged);
+    box-shadow:
+      4px 4px 0 var(--sepia),
+      0 0 0 1px rgba(139,115,85,0.2),
+      inset 0 0 40px rgba(139,115,85,0.05);
+    overflow: hidden;
+  }
+
+  canvas {
+    display: block;
+    cursor: grab;
+    touch-action: none;
+  }
+  canvas.dragging { cursor: grabbing; }
+
+  .stats {
+    display: flex;
+    gap: 2.5rem;
+    margin-top: 1.2rem;
+    justify-content: center;
+    flex-wrap: wrap;
+  }
+
+  .stat {
+    text-align: center;
+  }
+
+  .stat-label {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.7rem;
+    font-weight: 300;
+    color: var(--sepia);
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+  }
+
+  .stat-value {
+    font-size: 1.4rem;
+    font-weight: 600;
+    color: var(--ink);
+    font-variant-numeric: tabular-nums;
+    letter-spacing: -0.01em;
+  }
+
+  .stat-value.accent { color: var(--accent); }
+  .stat-value.blue { color: var(--blue); }
+  .stat-value.gold { color: var(--gold); }
+
+  .theorem-box {
+    margin-top: 1.4rem;
+    padding: 0.9rem 1.6rem;
+    border-left: 3px solid var(--accent);
+    background: rgba(192,57,43,0.05);
+    max-width: 540px;
+    text-align: left;
+  }
+
+  .theorem-box p {
+    font-size: 1rem;
+    color: var(--ink);
+    line-height: 1.6;
+  }
+
+  .theorem-box strong { color: var(--accent); }
+
+  .hint {
+    margin-top: 0.8rem;
+    font-size: 0.88rem;
+    color: var(--sepia);
+    font-style: italic;
+    text-align: center;
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Thales' <em>Theorem</em></h1>
+  <p>circa 600 BCE · Miletus</p>
+</header>
+
+<div class="canvas-wrap">
+  <canvas id="c" width="560" height="480"></canvas>
+</div>
+
+<div class="stats">
+  <div class="stat">
+    <div class="stat-label">Angle at C</div>
+    <div class="stat-value accent" id="angleC">90.0°</div>
+  </div>
+  <div class="stat">
+    <div class="stat-label">∠ ACB</div>
+    <div class="stat-value blue" id="angleA">—</div>
+  </div>
+  <div class="stat">
+    <div class="stat-label">∠ ABC</div>
+    <div class="stat-value gold" id="angleB">—</div>
+  </div>
+</div>
+
+<div class="theorem-box">
+  <p>Any angle inscribed in a semicircle and subtending the diameter is a <strong>right angle</strong>. Drag point <strong>C</strong> anywhere along the circle to verify.</p>
+</div>
+
+<p class="hint">⟡ Drag the red point C along the circle</p>
+
+<script>
+const canvas = document.getElementById('c');
+const ctx = canvas.getContext('2d');
+const W = canvas.width, H = canvas.height;
+
+// Circle params
+const cx = W / 2, cy = H / 2 + 10;
+const R = 175;
+
+// A and B are ends of diameter
+let A = { x: cx - R, y: cy };
+let B = { x: cx + R, y: cy };
+
+// C starts at top of circle
+let angle = Math.PI / 2; // angle from center
+
+function ptOnCircle(a) {
+  return { x: cx + R * Math.cos(a), y: cy - R * Math.sin(a) };
+}
+
+let C = ptOnCircle(angle);
+
+function dist(p, q) {
+  return Math.hypot(p.x - q.x, p.y - q.y);
+}
+
+function angleBetween(vertex, p1, p2) {
+  const a = Math.atan2(p1.y - vertex.y, p1.x - vertex.x);
+  const b = Math.atan2(p2.y - vertex.y, p2.x - vertex.x);
+  let d = Math.abs(a - b);
+  if (d > Math.PI) d = 2 * Math.PI - d;
+  return d * 180 / Math.PI;
+}
+
+// Colors
+const COL_CIRCLE = '#8b7355';
+const COL_DIAM = '#2c5f8a';
+const COL_TRI_AC = '#c0392b';
+const COL_TRI_BC = '#b8860b';
+const COL_FILL = 'rgba(44,95,138,0.07)';
+const COL_RIGHT = '#c0392b';
+const COL_C = '#c0392b';
+const COL_AB = '#2c5f8a';
+
+function drawArrow(x, y, angle, size, color) {
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.rotate(angle);
+  ctx.fillStyle = color;
+  ctx.beginPath();
+  ctx.moveTo(size, 0);
+  ctx.lineTo(-size * 0.6, -size * 0.5);
+  ctx.lineTo(-size * 0.6, size * 0.5);
+  ctx.closePath();
+  ctx.fill();
+  ctx.restore();
+}
+
+function draw() {
+  ctx.clearRect(0, 0, W, H);
+
+  // Subtle grid
+  ctx.save();
+  ctx.strokeStyle = 'rgba(139,115,85,0.12)';
+  ctx.lineWidth = 0.5;
+  for (let x = 0; x < W; x += 40) { ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, H); ctx.stroke(); }
+  for (let y = 0; y < H; y += 40) { ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y); ctx.stroke(); }
+  ctx.restore();
+
+  // Triangle fill
+  ctx.beginPath();
+  ctx.moveTo(A.x, A.y);
+  ctx.lineTo(B.x, B.y);
+  ctx.lineTo(C.x, C.y);
+  ctx.closePath();
+  ctx.fillStyle = COL_FILL;
+  ctx.fill();
+
+  // Circle
+  ctx.beginPath();
+  ctx.arc(cx, cy, R, 0, Math.PI * 2);
+  ctx.strokeStyle = COL_CIRCLE;
+  ctx.lineWidth = 1.5;
+  ctx.setLineDash([6, 4]);
+  ctx.stroke();
+  ctx.setLineDash([]);
+
+  // Center dot
+  ctx.beginPath();
+  ctx.arc(cx, cy, 3, 0, Math.PI * 2);
+  ctx.fillStyle = COL_CIRCLE;
+  ctx.fill();
+
+  // Diameter AB
+  ctx.beginPath();
+  ctx.moveTo(A.x, A.y);
+  ctx.lineTo(B.x, B.y);
+  ctx.strokeStyle = COL_DIAM;
+  ctx.lineWidth = 2.5;
+  ctx.stroke();
+
+  // AC
+  ctx.beginPath();
+  ctx.moveTo(A.x, A.y);
+  ctx.lineTo(C.x, C.y);
+  ctx.strokeStyle = COL_TRI_AC;
+  ctx.lineWidth = 2;
+  ctx.stroke();
+
+  // BC
+  ctx.beginPath();
+  ctx.moveTo(B.x, B.y);
+  ctx.lineTo(C.x, C.y);
+  ctx.strokeStyle = COL_TRI_BC;
+  ctx.lineWidth = 2;
+  ctx.stroke();
+
+  // Right angle mark at C
+  const sz = 14;
+  const toA = Math.atan2(A.y - C.y, A.x - C.x);
+  const toB = Math.atan2(B.y - C.y, B.x - C.x);
+  const px = C.x + sz * Math.cos(toA);
+  const py = C.y + sz * Math.sin(toA);
+  const qx = C.x + sz * Math.cos(toB);
+  const qy = C.y + sz * Math.sin(toB);
+  const mx = px + sz * Math.cos(toB);
+  const my = py + sz * Math.sin(toB);
+  ctx.beginPath();
+  ctx.moveTo(px, py);
+  ctx.lineTo(mx, my);
+  ctx.lineTo(qx, qy);
+  ctx.strokeStyle = COL_RIGHT;
+  ctx.lineWidth = 1.5;
+  ctx.stroke();
+
+  // Labels
+  ctx.font = 'italic 1rem "EB Garamond", serif';
+  ctx.fillStyle = COL_AB;
+  ctx.fillText('A', A.x - 20, A.y + 5);
+  ctx.fillText('B', B.x + 8, B.y + 5);
+  ctx.fillText('O', cx + 6, cy - 8);
+
+  ctx.fillStyle = COL_C;
+  const labelOffset = 18;
+  const la = angle + Math.PI / 2;
+  ctx.fillText('C', C.x + labelOffset * Math.cos(la) - 5, C.y - labelOffset * Math.sin(la) + 5);
+
+  // Point A
+  ctx.beginPath(); ctx.arc(A.x, A.y, 5, 0, Math.PI * 2);
+  ctx.fillStyle = COL_AB; ctx.fill();
+  // Point B
+  ctx.beginPath(); ctx.arc(B.x, B.y, 5, 0, Math.PI * 2);
+  ctx.fillStyle = COL_AB; ctx.fill();
+
+  // Point C — animated ring
+  ctx.beginPath();
+  ctx.arc(C.x, C.y, 8, 0, Math.PI * 2);
+  ctx.strokeStyle = 'rgba(192,57,43,0.35)';
+  ctx.lineWidth = 2;
+  ctx.stroke();
+  ctx.beginPath();
+  ctx.arc(C.x, C.y, 5, 0, Math.PI * 2);
+  ctx.fillStyle = COL_C;
+  ctx.fill();
+
+  // Stats
+  const aC = angleBetween(C, A, B);
+  const aA = angleBetween(A, C, B);
+  const aB = angleBetween(B, A, C);
+
+  document.getElementById('angleC').textContent = aC.toFixed(1) + '°';
+  document.getElementById('angleA').textContent = aA.toFixed(1) + '°';
+  document.getElementById('angleB').textContent = aB.toFixed(1) + '°';
+}
+
+// Interaction
+let dragging = false;
+
+function projectToCircle(mx, my) {
+  const dx = mx - cx, dy = my - cy;
+  const a = Math.atan2(-dy, dx);
+  // Avoid collapsing onto A or B (keep away from 0 and π)
+  const margin = 0.12;
+  let clamped = a;
+  if (Math.abs(clamped) < margin) clamped = margin * Math.sign(clamped || 1);
+  if (Math.abs(clamped - Math.PI) < margin) clamped = Math.PI - margin;
+  if (Math.abs(clamped + Math.PI) < margin) clamped = -Math.PI + margin;
+  return clamped;
+}
+
+function getPos(e) {
+  const r = canvas.getBoundingClientRect();
+  const t = e.touches ? e.touches[0] : e;
+  return { x: t.clientX - r.left, y: t.clientY - r.top };
+}
+
+function onDown(e) {
+  const p = getPos(e);
+  if (dist(p, C) < 18) {
+    dragging = true;
+    canvas.classList.add('dragging');
+    e.preventDefault();
+  }
+}
+
+function onMove(e) {
+  if (!dragging) return;
+  e.preventDefault();
+  const p = getPos(e);
+  angle = projectToCircle(p.x, p.y);
+  C = ptOnCircle(angle);
+  draw();
+}
+
+function onUp() {
+  dragging = false;
+  canvas.classList.remove('dragging');
+}
+
+canvas.addEventListener('mousedown', onDown);
+canvas.addEventListener('mousemove', onMove);
+canvas.addEventListener('mouseup', onUp);
+canvas.addEventListener('touchstart', onDown, { passive: false });
+canvas.addEventListener('touchmove', onMove, { passive: false });
+canvas.addEventListener('touchend', onUp);
+
+draw();
+</script>
+</body>
+</html>
